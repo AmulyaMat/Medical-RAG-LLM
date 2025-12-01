@@ -289,12 +289,6 @@ LLM-RAG/
 
 ---
 
-## License
-
-This project is intended for research and educational purposes in clinical NLP and medical informatics.
-
----
-
 ## Acknowledgments
 
 - **Med7** for medication entity recognition
