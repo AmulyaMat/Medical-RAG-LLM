@@ -115,53 +115,24 @@ Each script has a focused responsibility in the pipeline, creating a modular and
 
 ## Retriever system
 
-### Embeddings and FAISS
+### Retrieval pipeline
 
-The system uses **`emilyalsentzer/Bio_ClinicalBERT`** (ClinicalBERT) from Hugging Face to embed both the **user query** and the **chunked clinical note text**. Embeddings are **L2-normalized**, and a **FAISS** index is built over these vectors for **semantic search** using inner-product similarity (equivalent to cosine similarity after normalization). Chunking is character-based (approximately **~1200 characters with 200-character overlap**), preserving paragraph structure where possible to maintain semantic coherence.
+**Models & embeddings**: The system uses three models for retrieval and reranking:
+- **`emilyalsentzer/Bio_ClinicalBERT`** for embedding queries and chunked clinical notes (~1200 chars, 200-char overlap) with L2-normalized FAISS index for semantic search
+- **BM25** (via `rank_bm25`) for lexical matching of medication names and symptom keywords
+- **`michiyasunaga/BioLinkBERT-base`** cross-encoder for query-chunk pair reranking
 
-### Lexical BM25
-
-In parallel with FAISS, the system uses **BM25** (via the `rank_bm25` library) over the chunk texts for **lexical matching**, capturing exact term overlap, medication names, and symptom keywords that might be missed by semantic search alone.
-
-### Hybrid candidate generation & normalization
-
-For each query, the system:
-1. **Parses query intent** (patient-specific vs cohort vs medication-effectiveness vs general) and extracts fields like `patient_id`, `medication`, date ranges, and seizure-related symptoms using regex patterns and medication alias dictionaries
-2. Uses these intents and filters to **subset the metadata** before retrieval (e.g., filter by patient, medication, or date range)
-3. Runs **FAISS semantic search** (top-k=200) and **BM25 lexical search** (top-k=200) **in parallel**, retrieving candidate chunks from both indices
-4. **Normalizes** scores from both retrieval methods (min-max normalization) to comparable scales before fusion
-
-### Cross-encoder reranking (BioLinkBERT)
-
-The top candidates (typically top-100 after initial fusion) are **reranked** using a **cross-encoder based on `michiyasunaga/BioLinkBERT-base`**. The cross-encoder takes the query and each candidate chunk as a pair and processes them jointly, computing a **relevance score** from the `[CLS]` token embedding using mean pooling and cosine similarity. This step refines the ranking by **capturing fine-grained clinical semantics** and query-document interactions that are not visible to pure embedding similarity or BM25 alone.
-
-### Weighted fusion and hyperparameters
-
-The final ranking uses a **weighted fusion** of three normalized score components:
-- Cross-encoder score (`score_ce_norm`)
-- Semantic score (`score_semantic_norm`, from FAISS)
-- Lexical score (`score_lexical_norm`, from BM25)
-
-**Default weights**:
-- **`w_ce = 0.6`** (cross-encoder) — highest weight for contextualized relevance
-- **`w_sem = 0.25`** (semantic / FAISS) — moderate weight for conceptual similarity
-- **`w_lex = 0.15`** (lexical / BM25) — lower weight for exact term matching
-
-The system also applies **medication-aware boosts and penalties** (e.g., +0.2 boost when the candidate's medication field matches the query medication, -0.05 penalty for mismatches) to prefer **on-target medication contexts**.
+**Pipeline logic**: 
+1. **Query parsing** extracts `patient_id`, `medication`, date ranges, and seizure symptoms using regex and medication alias dictionaries
+2. **Metadata filtering** subsets chunks by parsed intents before retrieval
+3. **Parallel dual retrieval**: FAISS semantic search (top-k=200) + BM25 lexical search (top-k=200), with min-max score normalization
+4. **Cross-encoder reranking** on top-100 candidates using `[CLS]` token embeddings for query-document interaction
+5. **Weighted fusion** combines three normalized scores: `w_ce=0.6` (cross-encoder), `w_sem=0.25` (semantic), `w_lex=0.15` (lexical) (the scores are bound to change)
+6. **Medication-aware boosts**: +0.2 for medication matches, -0.05 for mismatches
 
 ### Auditability and testing
 
-The retriever returns not only ranked results but also an **"audit trail"** containing:
-- Parsed query intent and applied filters
-- Pipeline statistics (candidates from FAISS, BM25, after reranking, final count)
-- Per-result score breakdown (showing contribution of each component)
-
-**`test_hybrid_retrieval.py`** contains comprehensive unit tests for:
-- Query intent parsing
-- Basic retrieval without filters
-- Filtered retrieval (patient ID and date filters)
-- Medication synonym expansion (e.g., `levetiracetam` ↔ "Keppra", "LEV", "lev")
-- Validation that patient/medication filters are properly respected
+**Audit trail**: Returns parsed query intent, applied filters, pipeline statistics (FAISS/BM25 candidates, reranked counts), and per-result score breakdowns. **`test_hybrid_retrieval.py`** includes unit tests for query parsing, filtered/unfiltered retrieval, medication synonym expansion (`levetiracetam` ↔ "Keppra", "LEV"), and filter validation.
 
 **`eval_retriever.py`** computes standard **Information Retrieval metrics** (**Precision@K, Recall@K, MRR, Average Precision**) on labeled query datasets, using `hybrid_retrieve_core` under the hood.
 
@@ -236,7 +207,7 @@ Key dependencies include:
        patient_id="115154574",
        date_start="2023-01-01",
        date_end="2023-12-31",
-       topk=5
+       topk=5 # number of documents to retrieve
    )
    
    print(result['results'])  # DataFrame with ranked chunks
