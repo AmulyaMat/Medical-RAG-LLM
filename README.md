@@ -6,9 +6,9 @@ A Retrieval-Augmented Generation (RAG) system for extracting structured medicati
 
 ## Background and solution
 
-**Background:** Modern neurology and epilepsy clinics generate vast volumes of unstructured clinical notes per patient across multiple visits spanning years. Clinical annotations, medication timelines, and seizure status labels remain largely manual tasks, consuming 10–20 hours per week of clinician time. When patients have extensive medical histories with numerous hospital visits, notes become complex, redundant, and inconsistently organized, reducing efficiency and making it easy to miss critical facts. This disorganized documentation leads to incomplete patient characterization in machine learning research using EEG and other signal data—severity of seizures and comorbidities goes under-specified, medication histories and side effects are not systematically captured, resulting in biased or incomplete analyses.
+**Background:** Modern hospitals generate vast volumes of unstructured clinical notes per patient across multiple visits spanning years. Clinical annotations, medication timelines, and seizure status labels remain largely manual tasks, consuming 10–20 hours per week of clinician time. When patients have extensive medical histories with numerous hospital visits, notes become complex, redundant, and inconsistently organized, reducing efficiency and making it easy to miss critical facts. This disorganized documentation leads to incomplete patient characterization in machine learning analysis and comorbidities goes under-specified, medication histories and side effects are not systematically captured, resulting in biased or incomplete analyses.
 
-**RAG-LLM:** This project builds a Retrieval-Augmented Generation (RAG) system on top of clinical notes for neurological (seizure) patients, enabling an LLM to answer structured questions grounded in chart evidence. The system converts unstructured notes into a structured medication and seizure registry, indexes it with dense embeddings and lexical search, and allows an LLM to answer questions backed by retrieved evidence. The system is designed to answer patient- and medication-centric questions such as:
+**RAG-LLM:** This project builds a Retrieval-Augmented Generation (RAG) system on top of clinical notes for neurological patients, enabling an LLM to answer structured questions grounded in chart evidence. The system converts unstructured notes into a structured medication registry, indexes it with dense embeddings and lexical search, and allows an LLM to answer questions backed by retrieved evidence. The system is designed to answer patient- and medication-centric questions such as:
 
 - What medication did this patient take and when?
 - How much was the dosage of this medication?
@@ -16,27 +16,27 @@ A Retrieval-Augmented Generation (RAG) system for extracting structured medicati
 - What is the timeline of this patient under this medication?
 - How effective was this medication?
 - How many times did this patient take this medication?
-- What were the patient's seizure-related symptoms over time while on this medication?
 
 ---
 
 ## Data organization
 
-### Original clinical note folders
+### Raw data
 
-The raw data consists of a folder of patient files, where each patient is a text file containing clinical notes. Each text file contains de-identified clinical narratives mentioning visits, medications, seizure descriptions, EEG findings, and follow-up plans. The files include free-text descriptions of seizure frequency, side effects, treatment adjustments, discharge summaries, admission notes, and long-term monitoring reports.
+The raw data consists of a folder of patient files, where each patient is a text file containing clinical notes. The notes consists of de-identified clinical narratives mentioning visits, medications, seizure descriptions, EEG findings, and follow-up plans. The files include free-text descriptions of medication frequency, side effects, treatment adjustments, discharge summaries, admission notes, and long-term monitoring reports.
 
 ### Preprocessing and registry construction
 
 The pipeline uses a preprocessing step (`preprocess.py`) plus a registry builder script (`build_patient_med_registry.py`) to:
 - Read all relevant clinical text files per patient from the source directories
 - Clean and normalize the text (handling redactions, unicode, medical abbreviations)
-- Run **Med7** to extract medication entities and attributes
-- Run **medspaCy ConText** to detect seizure mentions, negation, and related symptoms
+- Employ **Med7** library tool to extract medication entities and attributes
+- Employ **medspaCy ConText** library tool to detect seizure mentions, negation, and related symptoms
+- Record all details of drug medications and seizures in the respective columns of the build_patient_med_registry.py and attach the relevant clinical note 
 
 This produces a **structured medication and seizure registry** which is combined into a single file: `all_patients_combined.parquet`.
 
-### NLP libraries and extraction
+#### NLP libraries and extraction
 
 **Med7** (specifically `en_core_med7_trf`, a transformer-based spaCy model) extracts **medication names, dosages, frequencies, routes, forms, and related spans** from free text, populating fields such as:
 - `medication` (canonical drug name)
@@ -45,24 +45,20 @@ This produces a **structured medication and seizure registry** which is combined
 - `drug_mention_count` (number of distinct mentions in the note)
 
 **medspaCy** (especially the ConText component and TargetRule matcher) is used to:
-- Detect and categorize **seizure-related terms** (e.g., "seizure", "ictal", "tonic-clonic", "convulsion")
+- Detect and categorize **seizure-related terms** 
 - Apply negation detection to determine **seizure_status** (positive/negative/unknown)
 - Aggregate **seizure_symptoms** from the clinical narrative
 
-### Registry schema
+### Building a registry from raw data
 
 After processing, each note-medication event is stored as a **row in a structured table** (saved as `all_patients_combined.parquet`):
 
 | Column | Description |
 |--------|-------------|
 | `row_id` | Unique identifier for each registry row |
-| `event_id` | Identifier grouping all medications extracted from the same clinical note event |
-| `event_type` | Event type label (e.g., `'clinical_note'`) |
 | `patient_id` | De-identified patient identifier |
 | `note_date` | Date of the clinical note (YYYY-MM-DD format) |
 | `note_id` | ID for the note or encounter |
-| `source_text_file` | Path to the original text file for traceability |
-| `source_date_key` | Key used for date-based linkage (typically same as `note_date`) |
 | `medication` | Canonical medication name extracted by Med7 |
 | `medication_dosage` | Extracted dosage string (e.g., "500 mg", "1.5 mg") |
 | `intake_times_per_day` | Number of times per day the medication is taken (derived from frequency) |
@@ -79,12 +75,10 @@ After processing, each note-medication event is stored as a **row in a structure
 
 ## Pipeline architecture
 
-The system starts from raw clinical notes in multiple formats, builds a medication/seizure registry using NLP extraction, creates a FAISS vector index for semantic search, runs a hybrid retriever combining multiple search strategies, evaluates retrieval performance with standard IR metrics, and uses an LLM to generate answers from retrieved context.
+The system starts from raw clinical notes, builds a medication registry using NLP extraction, creates a FAISS vector index for semantic search, runs a hybrid retriever combining multiple search strategies, evaluates retrieval performance with standard IR metrics, and uses an LLM to generate answers from retrieved context.
 
 ```
 Raw Clinical Notes
-├── patient_files/ (aggregated context files)
-└── patient_notes/ (individual dated notes)
           ↓
 build_patient_med_registry.py
 ├── Med7 (medication extraction)
@@ -96,7 +90,7 @@ all_patients_combined.parquet
           ↓
 build_faiss_index.py
 ├── Chunk note_text (~1200 chars with overlap)
-├── Embed with Bio_ClinicalBERT
+├── Embed with Bio_ClinicalBERT model
 └── Build faiss.index + faiss_chunk_metadata.parquet
           ↓
 retriever.py (Hybrid Retrieval System)
@@ -274,6 +268,12 @@ LLM-RAG/
 │   └── index_info.json
 └── eval_plots/                    # Evaluation visualizations
 ```
+
+---
+
+## License
+
+This project is intended for research and educational purposes in clinical NLP and medical informatics.
 
 ---
 
