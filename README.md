@@ -24,19 +24,7 @@ A Retrieval-Augmented Generation (RAG) system for extracting structured medicati
 
 ### Original clinical note folders
 
-The raw data comes in **two organizational structures**:
-
-**a. `patient_files/` folders**: Per-patient directories (e.g., `Patient_111527636`, `Patient_112301119`) containing pre-aggregated context files that combine multiple notes:
-- `<patient_id>_seizure_context.txt` (aggregated notes mentioning seizures)
-- `<patient_id>_no_seizure_context.txt` (aggregated notes without seizure mentions)
-- Similar variants for other clinical contexts (e.g., `autism_context.txt` where applicable)
-
-**b. `patient_notes/` folders**: Per-patient directories with individual dated clinical note files:
-- `2023-10-13_<patient_id>_seizure_note.txt`
-- `2024-01-12_<patient_id>_seizure_note.txt`
-- Each file represents a single clinical encounter or hospital visit
-
-Each text file contains de-identified clinical narratives mentioning visits, medications, seizure descriptions, EEG findings, and follow-up plans. The files include free-text descriptions of seizure frequency, side effects, treatment adjustments, discharge summaries, admission notes, and long-term monitoring reports.
+The raw data consists of a folder of patient files, where each patient is a text file containing clinical notes. Each text file contains de-identified clinical narratives mentioning visits, medications, seizure descriptions, EEG findings, and follow-up plans. The files include free-text descriptions of seizure frequency, side effects, treatment adjustments, discharge summaries, admission notes, and long-term monitoring reports.
 
 ### Preprocessing and registry construction
 
