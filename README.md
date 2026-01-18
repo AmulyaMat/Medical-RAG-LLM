@@ -1,6 +1,6 @@
-# Medical RAG for Neurological Patients
+# Medical RAG 
 
-A Retrieval-Augmented Generation (RAG) system for extracting structured medication and seizure information from unstructured clinical notes of neurological patients.
+A Retrieval-Augmented Generation (RAG) system for extracting structured medication from unstructured clinical notes of neurological patients.
 
 ---
 
