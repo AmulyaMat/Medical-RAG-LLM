@@ -17,8 +17,10 @@ A Retrieval-Augmented Generation (RAG) system for extracting structured medicati
 - How effective was this medication?
 - How many times did this patient take this medication?
 
-![RAG-LLM System Architecture](RAG-LLM.png)
-
+<div align="center">
+  <img src="RAG-LLM.png" alt="RAG-LLM System Architecture" width="800">
+</div>
+                            
 ---
 
 ## Data organization
