@@ -29,17 +29,6 @@ We use simple, robust, tokenizer-free chunking:
 - target_chars: 1200 (≈ 400–800 tokens), overlap_chars: 200
 - split at paragraph boundaries when possible, otherwise hard-wrap
 Each chunk links back to its source row_id from the registry.
-
-You can safely change CHUNK_* constants to fit your corpus.
-
-Performance Optimizations Applied
-----------------------------------
-1. ✅ itertuples() instead of iterrows() - 5-10x faster DataFrame iteration
-2. ✅ Cross-row batching - Chunk all texts first, then batch embed (better GPU utilization)
-3. ✅ FP16 inference - 2x speedup with model.half() on CUDA devices
-4. ✅ Excel export disabled by default - Saves 30-60 seconds
-5. ✅ Larger batch size (128 vs 64) - Better GPU throughput
-6. ✅ Memory efficiency - No intermediate vector list accumulation
 """
 
 import os
