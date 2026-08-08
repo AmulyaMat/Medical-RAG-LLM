@@ -76,4 +76,7 @@ eval_plots/
 *.pkl
 *.pickle
 
+# Superseded architecture, kept locally for reference only
+old_files/
+
 

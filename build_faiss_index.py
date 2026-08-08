@@ -30,16 +30,6 @@ We use simple, robust, tokenizer-free chunking:
 - split at paragraph boundaries when possible, otherwise hard-wrap
 Each chunk links back to its source row_id from the registry.
 
-You can safely change CHUNK_* constants to fit your corpus.
-
-Performance Optimizations Applied
-----------------------------------
-1. ✅ itertuples() instead of iterrows() - 5-10x faster DataFrame iteration
-2. ✅ Cross-row batching - Chunk all texts first, then batch embed (better GPU utilization)
-3. ✅ FP16 inference - 2x speedup with model.half() on CUDA devices
-4. ✅ Excel export disabled by default - Saves 30-60 seconds
-5. ✅ Larger batch size (128 vs 64) - Better GPU throughput
-6. ✅ Memory efficiency - No intermediate vector list accumulation
 """
 
 import os
@@ -56,8 +46,24 @@ import torch
 import numpy as np
 from transformers import AutoTokenizer, AutoModel
 
-# Import file paths from config.py
-from config import REGISTRY_PATH, OUTPUT_DIR, validate_paths
+# Paths come from config/config.yaml via src.utils.load_config.
+from src.utils import load_config
+
+_cfg = load_config()
+REGISTRY_PATH = _cfg["data"]["registry_parquet"]
+OUTPUT_DIR = str(Path(_cfg["data"]["faiss_index"]).parent)
+
+
+def validate_paths() -> bool:
+    """Validate that the registry file exists and the output dir can be created."""
+    registry_path = Path(REGISTRY_PATH)
+    if not registry_path.exists():
+        raise FileNotFoundError(
+            f"Registry file not found: {REGISTRY_PATH}\n"
+            f"Check data.registry_parquet in config/config.yaml"
+        )
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+    return True
 
 # -----------------
 # CONFIG

@@ -1,0 +1,76 @@
+# LLM-RAG configuration
+# ---------------------
+# All path values are RELATIVE to the project root (the LLM-RAG/ folder).
+# src/utils.py resolves them to absolute paths at load time, so this file
+# stays portable across machines.
+
+data:
+  # Source registry CSV produced by build_patient_med_registry.py.
+  # Lives under patient_registries/ for now; not duplicated under data/.
+  registry_csv: "patient_registries/all_patients_combined.csv"
+  # Same registry, parquet form — used by build_faiss_index.py (faster
+  # read/write, preserves dtypes better than CSV round-tripping).
+  registry_parquet: "patient_registries/all_patients_combined.parquet"
+  # Pre-chunked text produced by build_faiss_index.py. Each row is a
+  # ~1200-char chunk and is the natural candidate granularity for the
+  # retrievers. Schema: vector_id, chunk_id, note_id, patient_id,
+  # note_date, chunk_text_full, medication, seizure_status, ...
+  chunk_metadata: "vector_index/faiss_chunk_metadata.parquet"
+  # Pre-built FAISS index aligned 1:1 with chunk_metadata via vector_id.
+  # Bio_ClinicalBERT embeddings, L2-normalized (inner-product == cosine).
+  faiss_index: "vector_index/faiss.index"
+
+paths:
+  visualizations: "visualizations"
+  qdrant: "data/qdrant_local"
+
+# Toggle which retrievers feed Stage 1 of the multi-stage RAG pipeline.
+# Disable any to skip its model load + scoring. To add a new backend,
+# implement run_<name>() on MedicalRetrievers and register it in
+# _RETRIEVER_REGISTRY in main_pipeline.py, then add a toggle here.
+retrievers:
+  use:
+    colbert: false   # temporarily disabled — RAGatouille/ColBERT load is slow/flaky on torch 2.12
+    medcpt: true
+    specter: true
+    contriever: true
+    hybrid: true
+
+models:
+  colbert: "colbert-ir/colbertv2.0"
+  medcpt_query: "ncbi/MedCPT-Query-Encoder"
+  medcpt_doc: "ncbi/MedCPT-Article-Encoder"
+  specter: "allenai/specter2_base"
+  contriever: "facebook/contriever"
+  # Domain-trained cross-encoder from the NCBI MedCPT family — pairs with
+  # MedCPT-Query/Article encoders above. Ships safetensors (avoids the
+  # torch<2.6 + pickle CVE block in transformers), and the relevance head
+  # is actually trained, so ce_score is meaningful rather than coming from
+  # a freshly-initialized num_labels=1 head over a base BERT.
+  cross_encoder: "ncbi/MedCPT-Cross-Encoder"
+  # Dense encoder for the hybrid retriever. MUST match the model used
+  # by build_faiss_index.py, otherwise reconstructed vectors and fresh
+  # query embeddings won't share the same space.
+  dense_embedding: "emilyalsentzer/Bio_ClinicalBERT"
+
+params:
+  batch_size: 16
+  # Max token length for encoder inputs. MedCPT/SPECTER/Contriever all
+  # use 512-token BERT-family encoders, so 512 is the hard ceiling.
+  max_length: 512
+
+  # ── Multi-stage RAG pipeline (main_pipeline.run_pipeline) ────────────
+  # Stage 1: each of the 4 retrievers returns this many top chunks.
+  per_retriever_k: 20
+  # Stage 2: Reciprocal Rank Fusion constant. 60 is the value used in
+  # the original Cormack et al. (2009) RRF paper and widely adopted.
+  rrf_k: 60
+  # Stage 2 output: number of fused unique candidates passed to the CE.
+  rrf_top_n: 20
+  # Stage 3: final reranked output size.
+  final_top_n: 5
+
+  # ── Hybrid retriever (single-method alternative, MedicalRetrievers.run_hybrid) ─
+  # Min-max-normalized weighted fusion of BM25 + Bio_ClinicalBERT.
+  hybrid_dense_weight: 0.5
+  hybrid_bm25_weight: 0.5
