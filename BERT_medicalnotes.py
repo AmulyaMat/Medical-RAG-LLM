@@ -505,9 +505,9 @@ def example_4_your_data():
     from pathlib import Path
     
     extractor = MedicalEntityExtractor()
-    
-    # Your file structure
-    patient_files_dir = Path("C:/Users/Amulya/OneDrive - neumarker.ai/Codes/NLP_personal/LLM-RAG/patient_files")
+
+    # patient_files/ lives at the project root, alongside this script.
+    patient_files_dir = Path(__file__).parent / "patient_files"
     
     # Process one patient
     patient_folder = patient_files_dir / "Patient_115154574"
